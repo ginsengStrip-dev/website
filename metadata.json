@@ -1,0 +1,6 @@
+{
+  "name": "Manuscript Preservation & Digital Reader",
+  "description": "A digital preservation platform and online reader for rare manuscripts with admin management, binary PDF storage, and full-screen viewer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

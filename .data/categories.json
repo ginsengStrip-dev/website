@@ -1,0 +1,32 @@
+[
+  {
+    "id": "1",
+    "name": "Medical & Ayurveda",
+    "description": "Classical medical treatises, herbalism, and surgical guides"
+  },
+  {
+    "id": "2",
+    "name": "Astronomy & Mathematics",
+    "description": "Planetary mechanics, geometry, and ancient calculation codices"
+  },
+  {
+    "id": "3",
+    "name": "Philosophy & Vedic Texts",
+    "description": "Metaphysical treatises, commentaries, and spiritual discourses"
+  },
+  {
+    "id": "4",
+    "name": "Literature & Poetry",
+    "description": "Epic narratives, classical drama, and poetic compositions"
+  },
+  {
+    "id": "5",
+    "name": "History & Chronicles",
+    "description": "Royal records, genealogical annals, and travelogues"
+  },
+  {
+    "id": "6",
+    "name": "Alchemy & Botany",
+    "description": "Metallurgical arts, plant classifications, and natural science"
+  }
+]

@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Archivalia olive and sage palette */
+@theme {
+  --color-amber-50: #f7f8ee;
+  --color-amber-100: #edf0d9;
+  --color-amber-200: #d4de95;
+  --color-amber-300: #c8d27f;
+  --color-amber-400: #bac095;
+  --color-amber-500: #9ca66c;
+  --color-amber-600: #7b8448;
+  --color-amber-700: #636b2f;
+  --color-amber-800: #51572b;
+  --color-amber-900: #3d4127;
+  --color-amber-950: #292c1a;
+}

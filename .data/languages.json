@@ -1,0 +1,42 @@
+[
+  {
+    "id": "1",
+    "name": "Sanskrit",
+    "code": "sa"
+  },
+  {
+    "id": "2",
+    "name": "Tamil",
+    "code": "ta"
+  },
+  {
+    "id": "3",
+    "name": "Persian",
+    "code": "fa"
+  },
+  {
+    "id": "4",
+    "name": "Pali",
+    "code": "pi"
+  },
+  {
+    "id": "5",
+    "name": "Tibetan",
+    "code": "bo"
+  },
+  {
+    "id": "6",
+    "name": "Latin",
+    "code": "la"
+  },
+  {
+    "id": "7",
+    "name": "Arabic",
+    "code": "ar"
+  },
+  {
+    "id": "8",
+    "name": "Old Javanese (Kawi)",
+    "code": "kaw"
+  }
+]
