@@ -23,8 +23,4 @@ SQLite stores:
 
 On the first database startup, existing `.data/*.json`, `.data/pdfs`, and `.data/covers` content is imported transactionally. The legacy files are left in place as a backup and are not read again after the database contains manuscripts.
 
-## Production
 
-Build with `npm.cmd run build` and start with `npm.cmd start`.
-
-SQLite is a single-file database. Deploy `.data/archive.sqlite` on a persistent volume and run one application instance. For multiple instances or platforms with ephemeral filesystems, use a shared server database such as PostgreSQL before deploying; a local SQLite file will not survive replacement of an ephemeral container.
