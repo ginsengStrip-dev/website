@@ -6,9 +6,9 @@ Archivalia is a React and Express manuscript archive. Application records and up
 
 Requires Node.js 22.5 or newer.
 
-1. Install dependencies with `npm install`.
+1. Install dependencies with `npm.cmd install`.
 2. Copy `.env.example` to `.env` and set a strong `JWT_SECRET` and initial admin password.
-3. Run `npm run dev`.
+3. Run `npm.cmd run dev`.
 4. Open `http://localhost:3000`.
 
 The default database is `.data/archive.sqlite`. Set `DATABASE_PATH` to use a different file and `PORT` to use another port.
