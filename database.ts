@@ -82,6 +82,74 @@ export interface AdminRecord {
   passwordHash: string;
 }
 
+export type GalleryEventStatusValue = 'ACTIVE' | 'INACTIVE';
+
+export interface GalleryEventRecord {
+  id: number;
+  title: string;
+  description: string;
+  eventDate: string;
+  eventYear: number;
+  status: GalleryEventStatusValue;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GalleryEventWrite {
+  title: string;
+  description: string;
+  eventDate: string;
+  eventYear: number;
+  status: GalleryEventStatusValue;
+}
+
+export interface GalleryImageRecord {
+  id: number;
+  eventId: number;
+  imageUrl: string;
+  thumbnailUrl: string;
+  caption: string;
+  altText: string;
+  displayOrder: number;
+  isFeatured: boolean;
+  isActive: boolean;
+  width?: number;
+  height?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GalleryImageWrite {
+  eventId: number;
+  imageUrl: string;
+  thumbnailUrl: string;
+  caption: string;
+  altText: string;
+  displayOrder: number;
+  isFeatured: boolean;
+  isActive: boolean;
+  width?: number;
+  height?: number;
+}
+
+export interface GalleryImageMetadataUpdate {
+  caption?: string;
+  altText?: string;
+  displayOrder?: number;
+  isFeatured?: boolean;
+  isActive?: boolean;
+}
+
+export interface GalleryImageWithEventRecord extends GalleryImageRecord {
+  eventTitle: string;
+  eventDescription: string;
+  eventDate: string;
+  eventYear: number;
+  eventStatus: GalleryEventStatusValue;
+  eventCreatedAt: string;
+  eventUpdatedAt: string;
+}
+
 const DEFAULT_CATEGORIES: CategoryRecord[] = [
   { id: '1', name: 'Medical & Ayurveda', description: 'Classical medical treatises, herbalism, and surgical guides' },
   { id: '2', name: 'Astronomy & Mathematics', description: 'Planetary mechanics, geometry, and ancient calculation codices' },
@@ -178,13 +246,52 @@ database.exec(`
     updated_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS gallery_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    event_date TEXT NOT NULL,
+    event_year INTEGER NOT NULL CHECK (event_year BETWEEN 1 AND 9999),
+    status TEXT NOT NULL DEFAULT 'INACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (event_year = CAST(substr(event_date, 1, 4) AS INTEGER))
+  );
+
+  CREATE TABLE IF NOT EXISTS gallery_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL,
+    image_url TEXT NOT NULL,
+    thumbnail_url TEXT NOT NULL,
+    caption TEXT NOT NULL,
+    alt_text TEXT NOT NULL,
+    display_order INTEGER NOT NULL DEFAULT 0 CHECK (display_order >= 0),
+    is_featured INTEGER NOT NULL DEFAULT 0 CHECK (is_featured IN (0, 1)),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    width INTEGER CHECK (width IS NULL OR width > 0),
+    height INTEGER CHECK (height IS NULL OR height > 0),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (event_id) REFERENCES gallery_events(id) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_manuscripts_status ON manuscripts(status);
   CREATE INDEX IF NOT EXISTS idx_manuscripts_category ON manuscripts(category);
   CREATE INDEX IF NOT EXISTS idx_manuscripts_language ON manuscripts(language);
   CREATE INDEX IF NOT EXISTS idx_manuscripts_year ON manuscripts(year);
   CREATE INDEX IF NOT EXISTS idx_manuscripts_created_at ON manuscripts(created_at DESC);
 
-  PRAGMA user_version = 2;
+  CREATE INDEX IF NOT EXISTS idx_gallery_events_year ON gallery_events(event_year DESC);
+  CREATE INDEX IF NOT EXISTS idx_gallery_events_status_year_date
+    ON gallery_events(status, event_year DESC, event_date DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_gallery_images_event_order
+    ON gallery_images(event_id, display_order, id);
+  CREATE INDEX IF NOT EXISTS idx_gallery_images_active_event
+    ON gallery_images(is_active, event_id);
+  CREATE INDEX IF NOT EXISTS idx_gallery_images_featured
+    ON gallery_images(is_featured, event_id) WHERE is_active = 1;
+
+  PRAGMA user_version = 3;
 `);
 
 function inTransaction<T>(operation: () => T): T {
@@ -316,6 +423,7 @@ function setMetadata(key: string, value: string) {
 
 const LEGACY_IMPORT_KEY = 'legacy_import_v1_complete';
 const INITIAL_MANUSCRIPTS_KEY = 'initial_manuscripts_v1_complete';
+const PDF_PAGE_COUNTS_KEY = 'pdf_page_counts_v1_complete';
 
 if (getMetadata(LEGACY_IMPORT_KEY) !== '1') {
   seedLookupTablesFromLegacyFiles();
@@ -365,6 +473,14 @@ export function countManuscripts(): number {
 
 export function shouldSeedInitialManuscripts(): boolean {
   return getMetadata(INITIAL_MANUSCRIPTS_KEY) !== '1';
+}
+
+export function shouldSyncPdfPageCounts(): boolean {
+  return getMetadata(PDF_PAGE_COUNTS_KEY) !== '1';
+}
+
+export function markPdfPageCountsSynced() {
+  setMetadata(PDF_PAGE_COUNTS_KEY, '1');
 }
 
 export function insertInitialManuscripts(entries: InitialManuscript[]) {
@@ -553,6 +669,316 @@ export function updateManuscript(record: ManuscriptRecord, pdfData?: Buffer, cov
 
 export function deleteManuscript(id: number): boolean {
   return Number(database.prepare('DELETE FROM manuscripts WHERE id = ?').run(id).changes) > 0;
+}
+
+const GALLERY_EVENT_COLUMNS = `
+  id, title, description, event_date, event_year, status, created_at, updated_at
+`;
+
+const GALLERY_IMAGE_COLUMNS = `
+  id, event_id, image_url, thumbnail_url, caption, alt_text, display_order,
+  is_featured, is_active, width, height, created_at, updated_at
+`;
+
+const GALLERY_IMAGE_WITH_EVENT_COLUMNS = `
+  i.id, i.event_id, i.image_url, i.thumbnail_url, i.caption, i.alt_text, i.display_order,
+  i.is_featured, i.is_active, i.width, i.height, i.created_at, i.updated_at,
+  e.title AS event_title, e.description AS event_description, e.event_date,
+  e.event_year, e.status AS event_status, e.created_at AS event_created_at,
+  e.updated_at AS event_updated_at
+`;
+
+function normalizeGalleryStatus(value: unknown): GalleryEventStatusValue {
+  return value === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE';
+}
+
+function galleryEventFromRow(row: any): GalleryEventRecord {
+  return {
+    id: Number(row.id),
+    title: String(row.title),
+    description: String(row.description),
+    eventDate: String(row.event_date),
+    eventYear: Number(row.event_year),
+    status: normalizeGalleryStatus(row.status),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+function galleryImageFromRow(row: any): GalleryImageRecord {
+  return {
+    id: Number(row.id),
+    eventId: Number(row.event_id),
+    imageUrl: String(row.image_url),
+    thumbnailUrl: String(row.thumbnail_url),
+    caption: String(row.caption),
+    altText: String(row.alt_text),
+    displayOrder: Number(row.display_order),
+    isFeatured: Boolean(row.is_featured),
+    isActive: Boolean(row.is_active),
+    width: row.width === null || row.width === undefined ? undefined : Number(row.width),
+    height: row.height === null || row.height === undefined ? undefined : Number(row.height),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+function galleryImageWithEventFromRow(row: any): GalleryImageWithEventRecord {
+  return {
+    ...galleryImageFromRow(row),
+    eventTitle: String(row.event_title),
+    eventDescription: String(row.event_description),
+    eventDate: String(row.event_date),
+    eventYear: Number(row.event_year),
+    eventStatus: normalizeGalleryStatus(row.event_status),
+    eventCreatedAt: String(row.event_created_at),
+    eventUpdatedAt: String(row.event_updated_at),
+  };
+}
+
+export function listGalleryEvents(includeInactive = false): GalleryEventRecord[] {
+  const where = includeInactive ? '' : "WHERE status = 'ACTIVE'";
+  const rows = database.prepare(`
+    SELECT ${GALLERY_EVENT_COLUMNS}
+    FROM gallery_events
+    ${where}
+    ORDER BY event_date DESC, id DESC
+  `).all() as any[];
+  return rows.map(galleryEventFromRow);
+}
+
+export function getGalleryEvent(id: number): GalleryEventRecord | undefined {
+  const row = database.prepare(`
+    SELECT ${GALLERY_EVENT_COLUMNS}
+    FROM gallery_events
+    WHERE id = ?
+  `).get(id);
+  return row ? galleryEventFromRow(row) : undefined;
+}
+
+export function insertGalleryEvent(record: GalleryEventWrite): GalleryEventRecord {
+  const now = new Date().toISOString();
+  const result = database.prepare(`
+    INSERT INTO gallery_events (
+      title, description, event_date, event_year, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    record.title,
+    record.description,
+    record.eventDate,
+    record.eventYear,
+    record.status,
+    now,
+    now,
+  );
+
+  const inserted = getGalleryEvent(Number(result.lastInsertRowid));
+  if (!inserted) throw new Error('Inserted gallery event could not be read back');
+  return inserted;
+}
+
+export function updateGalleryEvent(id: number, record: GalleryEventWrite): GalleryEventRecord | undefined {
+  const result = database.prepare(`
+    UPDATE gallery_events SET
+      title = ?, description = ?, event_date = ?, event_year = ?, status = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    record.title,
+    record.description,
+    record.eventDate,
+    record.eventYear,
+    record.status,
+    new Date().toISOString(),
+    id,
+  );
+  return Number(result.changes) > 0 ? getGalleryEvent(id) : undefined;
+}
+
+export function deleteGalleryEvent(id: number): boolean {
+  return Number(database.prepare('DELETE FROM gallery_events WHERE id = ?').run(id).changes) > 0;
+}
+
+export function listGalleryImagesForEvent(eventId: number, includeInactive = true): GalleryImageRecord[] {
+  const activeCondition = includeInactive ? '' : 'AND is_active = 1';
+  const rows = database.prepare(`
+    SELECT ${GALLERY_IMAGE_COLUMNS}
+    FROM gallery_images
+    WHERE event_id = ? ${activeCondition}
+    ORDER BY display_order ASC, id ASC
+  `).all(eventId) as any[];
+  return rows.map(galleryImageFromRow);
+}
+
+export function getGalleryImage(id: number): GalleryImageRecord | undefined {
+  const row = database.prepare(`
+    SELECT ${GALLERY_IMAGE_COLUMNS}
+    FROM gallery_images
+    WHERE id = ?
+  `).get(id);
+  return row ? galleryImageFromRow(row) : undefined;
+}
+
+export function getGalleryImageWithEvent(id: number): GalleryImageWithEventRecord | undefined {
+  const row = database.prepare(`
+    SELECT ${GALLERY_IMAGE_WITH_EVENT_COLUMNS}
+    FROM gallery_images i
+    INNER JOIN gallery_events e ON e.id = i.event_id
+    WHERE i.id = ?
+  `).get(id);
+  return row ? galleryImageWithEventFromRow(row) : undefined;
+}
+
+export function insertGalleryImages(records: GalleryImageWrite[]): GalleryImageRecord[] {
+  if (!records.length) return [];
+  const insert = database.prepare(`
+    INSERT INTO gallery_images (
+      event_id, image_url, thumbnail_url, caption, alt_text, display_order,
+      is_featured, is_active, width, height, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  return inTransaction(() => {
+    const now = new Date().toISOString();
+    const ids: number[] = [];
+    for (const record of records) {
+      const result = insert.run(
+        record.eventId,
+        record.imageUrl,
+        record.thumbnailUrl,
+        record.caption,
+        record.altText,
+        record.displayOrder,
+        record.isFeatured ? 1 : 0,
+        record.isActive ? 1 : 0,
+        record.width || null,
+        record.height || null,
+        now,
+        now,
+      );
+      ids.push(Number(result.lastInsertRowid));
+    }
+
+    return ids.map(id => {
+      const image = getGalleryImage(id);
+      if (!image) throw new Error('Inserted gallery image could not be read back');
+      return image;
+    });
+  });
+}
+
+export function updateGalleryImageMetadata(
+  id: number,
+  changes: GalleryImageMetadataUpdate,
+): GalleryImageRecord | undefined {
+  const current = getGalleryImage(id);
+  if (!current) return undefined;
+
+  const isActive = changes.isActive ?? current.isActive;
+  const isFeatured = isActive ? (changes.isFeatured ?? current.isFeatured) : false;
+  database.prepare(`
+    UPDATE gallery_images SET
+      caption = ?, alt_text = ?, display_order = ?, is_featured = ?, is_active = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    changes.caption ?? current.caption,
+    changes.altText ?? current.altText,
+    changes.displayOrder ?? current.displayOrder,
+    isFeatured ? 1 : 0,
+    isActive ? 1 : 0,
+    new Date().toISOString(),
+    id,
+  );
+  return getGalleryImage(id);
+}
+
+export function replaceGalleryImageAsset(
+  id: number,
+  imageUrl: string,
+  thumbnailUrl: string,
+  width?: number,
+  height?: number,
+): GalleryImageRecord | undefined {
+  const result = database.prepare(`
+    UPDATE gallery_images SET
+      image_url = ?, thumbnail_url = ?, width = ?, height = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    imageUrl,
+    thumbnailUrl,
+    width || null,
+    height || null,
+    new Date().toISOString(),
+    id,
+  );
+  return Number(result.changes) > 0 ? getGalleryImage(id) : undefined;
+}
+
+export function reorderGalleryImages(eventId: number, imageIds: number[]): GalleryImageRecord[] {
+  return inTransaction(() => {
+    const existing = listGalleryImagesForEvent(eventId, true);
+    const existingIds = existing.map(image => image.id);
+    const uniqueIds = new Set(imageIds);
+    if (
+      imageIds.length !== existingIds.length ||
+      uniqueIds.size !== imageIds.length ||
+      existingIds.some(id => !uniqueIds.has(id))
+    ) {
+      throw new Error('Image order must contain every image in this event exactly once');
+    }
+
+    const update = database.prepare(`
+      UPDATE gallery_images SET display_order = ?, updated_at = ?
+      WHERE id = ? AND event_id = ?
+    `);
+    const now = new Date().toISOString();
+    imageIds.forEach((id, index) => update.run(index + 1, now, id, eventId));
+    return listGalleryImagesForEvent(eventId, true);
+  });
+}
+
+export function deleteGalleryImage(id: number): boolean {
+  return Number(database.prepare('DELETE FROM gallery_images WHERE id = ?').run(id).changes) > 0;
+}
+
+export function listAvailableGalleryYears(maxYear: number): number[] {
+  const rows = database.prepare(`
+    SELECT DISTINCT e.event_year
+    FROM gallery_events e
+    WHERE e.status = 'ACTIVE'
+      AND e.event_year <= ?
+      AND EXISTS (
+        SELECT 1 FROM gallery_images i
+        WHERE i.event_id = e.id AND i.is_active = 1
+      )
+    ORDER BY e.event_year DESC
+  `).all(maxYear) as any[];
+  return rows.map(row => Number(row.event_year));
+}
+
+export function countPublicGalleryImagesByYear(year: number): number {
+  const row = database.prepare(`
+    SELECT COUNT(*) AS count
+    FROM gallery_images i
+    INNER JOIN gallery_events e ON e.id = i.event_id
+    WHERE e.event_year = ? AND e.status = 'ACTIVE' AND i.is_active = 1
+  `).get(year) as any;
+  return Number(row?.count || 0);
+}
+
+export function listPublicGalleryImagesByYear(
+  year: number,
+  limit: number,
+  offset: number,
+): GalleryImageWithEventRecord[] {
+  const rows = database.prepare(`
+    SELECT ${GALLERY_IMAGE_WITH_EVENT_COLUMNS}
+    FROM gallery_images i
+    INNER JOIN gallery_events e ON e.id = i.event_id
+    WHERE e.event_year = ? AND e.status = 'ACTIVE' AND i.is_active = 1
+    ORDER BY e.event_date DESC, e.id DESC, i.display_order ASC, i.id ASC
+    LIMIT ? OFFSET ?
+  `).all(year, limit, offset) as any[];
+  return rows.map(galleryImageWithEventFromRow);
 }
 
 export function listCategories(): CategoryRecord[] {

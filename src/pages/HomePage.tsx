@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Manuscript, Category, Language } from '../types';
 import { ManuscriptCard } from '../components/ManuscriptCard';
+import { HomeGalleryCarousel } from '../components/HomeGalleryCarousel';
 
 interface HomePageProps {
   manuscripts: Manuscript[];
@@ -142,6 +143,8 @@ export const HomePage: React.FC<HomePageProps> = ({
           ))}
         </div>
       </section>
+
+      <HomeGalleryCarousel onViewGallery={() => onNavigate('gallery')} />
 
       {/* Category Explorer */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">

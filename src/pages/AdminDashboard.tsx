@@ -28,6 +28,7 @@ import {
   deleteLanguage,
 } from '../lib/api';
 import { AdminManuscriptForm } from './AdminManuscriptForm';
+import { AdminGalleryManagement } from './AdminGalleryManagement';
 
 interface AdminDashboardProps {
   onRead: (id: number) => void;
@@ -35,7 +36,7 @@ interface AdminDashboardProps {
   onLogoutAdmin: () => void;
 }
 
-type AdminTab = 'manuscripts' | 'categories' | 'languages';
+type AdminTab = 'manuscripts' | 'gallery' | 'categories' | 'languages';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onRead,
@@ -210,17 +211,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setEditingManuscript(null);
-              setShowForm(true);
-            }}
-            className="px-4 py-2.5 rounded-xl bg-amber-900 hover:bg-amber-950 text-amber-50 text-xs font-bold flex items-center gap-1.5 shadow-md transition-all"
-            id="admin-add-manuscript-btn"
-          >
-            <Plus className="w-4 h-4 text-amber-300" />
-            <span>Add New Manuscript</span>
-          </button>
+          {activeTab === 'manuscripts' && (
+            <button
+              onClick={() => {
+                setEditingManuscript(null);
+                setShowForm(true);
+              }}
+              className="px-4 py-2.5 rounded-xl bg-amber-900 hover:bg-amber-950 text-amber-50 text-xs font-bold flex items-center gap-1.5 shadow-md transition-all"
+              id="admin-add-manuscript-btn"
+            >
+              <Plus className="w-4 h-4 text-amber-300" />
+              <span>Add New Manuscript</span>
+            </button>
+          )}
 
           <button
             onClick={onLogoutAdmin}
@@ -261,10 +264,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-amber-200 text-xs font-bold">
+      <div className="flex items-center gap-2 border-b border-amber-200 text-xs font-bold overflow-x-auto">
         <button
           onClick={() => setActiveTab('manuscripts')}
-          className={`px-4 py-2.5 rounded-t-xl transition-all border-t border-x ${
+          className={`px-4 py-2.5 rounded-t-xl transition-all border-t border-x shrink-0 ${
             activeTab === 'manuscripts'
               ? 'bg-[#fbf8f1] text-amber-950 border-[#e5dcd0] border-b-transparent font-extrabold'
               : 'text-amber-900/60 border-transparent hover:text-amber-950'
@@ -274,8 +277,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('gallery')}
+          className={`px-4 py-2.5 rounded-t-xl transition-all border-t border-x shrink-0 ${
+            activeTab === 'gallery'
+              ? 'bg-[#fbf8f1] text-amber-950 border-[#e5dcd0] border-b-transparent font-extrabold'
+              : 'text-amber-900/60 border-transparent hover:text-amber-950'
+          }`}
+        >
+          Event Gallery
+        </button>
+
+        <button
           onClick={() => setActiveTab('categories')}
-          className={`px-4 py-2.5 rounded-t-xl transition-all border-t border-x ${
+          className={`px-4 py-2.5 rounded-t-xl transition-all border-t border-x shrink-0 ${
             activeTab === 'categories'
               ? 'bg-[#fbf8f1] text-amber-950 border-[#e5dcd0] border-b-transparent font-extrabold'
               : 'text-amber-900/60 border-transparent hover:text-amber-950'
@@ -286,7 +300,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <button
           onClick={() => setActiveTab('languages')}
-          className={`px-4 py-2.5 rounded-t-xl transition-all border-t border-x ${
+          className={`px-4 py-2.5 rounded-t-xl transition-all border-t border-x shrink-0 ${
             activeTab === 'languages'
               ? 'bg-[#fbf8f1] text-amber-950 border-[#e5dcd0] border-b-transparent font-extrabold'
               : 'text-amber-900/60 border-transparent hover:text-amber-950'
@@ -408,6 +422,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {activeTab === 'gallery' && <AdminGalleryManagement />}
 
       {/* TAB 2: CATEGORIES */}
       {activeTab === 'categories' && (

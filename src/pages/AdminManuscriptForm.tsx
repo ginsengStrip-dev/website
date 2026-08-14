@@ -62,12 +62,28 @@ export const AdminManuscriptForm: React.FC<AdminManuscriptFormProps> = ({
   }, [manuscriptToEdit, categories, languages]);
 
   // Handle PDF file selection
-  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.type !== 'application/pdf') {
       setError('Selected file must be a PDF document.');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const { PDFDocument } = await import('pdf-lib');
+      const pdf = await PDFDocument.load(await file.arrayBuffer());
+      const detectedPageCount = pdf.getPageCount();
+      if (detectedPageCount < 1) throw new Error('The PDF has no pages.');
+
+      setFormData(prev => ({ ...prev, pageCount: detectedPageCount }));
+      setError(null);
+    } catch {
+      setError('The selected PDF could not be read. Please choose a valid, unlocked PDF.');
+      setPdfFileName('');
+      e.target.value = '';
       return;
     }
 
@@ -231,15 +247,19 @@ export const AdminManuscriptForm: React.FC<AdminManuscriptFormProps> = ({
 
             <div className="space-y-1">
               <label className="text-xs font-bold text-[#8A8471] uppercase tracking-wider block">
-                Folio / Page Count
+                Folio / Page Count (Detected Automatically)
               </label>
               <input
                 type="number"
                 min="1"
                 value={formData.pageCount}
-                onChange={e => setFormData({ ...formData, pageCount: e.target.value === '' ? '' : Number(e.target.value) })}
-                className="w-full px-3.5 py-2.5 rounded-sm bg-white border border-[#D1CEC7] text-sm text-[#2C2C2C] focus:outline-none focus:border-[#B08D57]"
+                readOnly
+                aria-readonly="true"
+                className="w-full px-3.5 py-2.5 rounded-sm bg-[#edf0d9] border border-[#D1CEC7] text-sm text-[#2C2C2C] cursor-not-allowed"
               />
+              <p className="text-[11px] text-[#8A8471]">
+                Upload a PDF and its total number of pages will be used as the folio count.
+              </p>
             </div>
 
             <div className="space-y-1">

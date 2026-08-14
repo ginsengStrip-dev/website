@@ -32,7 +32,7 @@ type DisplayMode = 'single' | 'scroll';
 
 export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({ manuscript, onClose }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [totalPages, setTotalPages] = useState<number>(manuscript.pageCount || 4);
+  const totalPages = Math.max(1, manuscript.pageCount || 1);
   const [zoom, setZoom] = useState<number>(100);
   const [rotation, setRotation] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -50,6 +50,10 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({ manuscript, 
   useEffect(() => {
     setPageInput(currentPage.toString());
   }, [currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [manuscript.id]);
 
   useEffect(() => {
     const preventContextMenu = (event: MouseEvent) => event.preventDefault();
@@ -334,6 +338,7 @@ export const ManuscriptReader: React.FC<ManuscriptReaderProps> = ({ manuscript, 
             {/* Embedded Native PDF Viewer Layer */}
             <div className="absolute inset-0 overflow-hidden rounded-xl">
               <iframe
+                key={`${manuscript.id}-${currentPage}`}
                 src={`${pdfUrl}#page=${currentPage}&toolbar=0&navpanes=0&scrollbar=1`}
                 title={manuscript.title}
                 className="absolute left-0 top-[-56px] w-full h-[calc(100%+56px)] border-none"

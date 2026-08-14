@@ -77,6 +77,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             <button
+              onClick={() => onNavigate('gallery')}
+              className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                currentTab === 'gallery'
+                  ? 'bg-amber-900/10 text-amber-950 font-semibold'
+                  : 'text-amber-900/80 hover:bg-amber-900/5 hover:text-amber-950'
+              }`}
+            >
+              Event Gallery
+            </button>
+
+            <button
               onClick={() => onNavigate('about')}
               className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
                 currentTab === 'about'
@@ -155,6 +166,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-amber-950 hover:bg-amber-100"
           >
             Manuscript Catalogue
+          </button>
+          <button
+            onClick={() => {
+              onNavigate('gallery');
+              setMobileMenuOpen(false);
+            }}
+            className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-amber-950 hover:bg-amber-100"
+          >
+            Event Gallery
           </button>
           <button
             onClick={() => {

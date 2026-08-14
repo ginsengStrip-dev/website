@@ -1,28 +1,56 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import sharp from 'sharp';
 import {
+  DATA_DIR,
+  countPublicGalleryImagesByYear,
   createCategory,
   createLanguage,
   deleteCategory,
+  deleteGalleryEvent,
+  deleteGalleryImage,
   deleteLanguage,
   deleteManuscript,
   findAdminByEmail,
   getDatabaseStatus,
+  getGalleryEvent,
+  getGalleryImage,
+  getGalleryImageWithEvent,
   getManuscript,
   getManuscriptCover,
   getManuscriptPdf,
+  insertGalleryEvent,
+  insertGalleryImages,
   insertInitialManuscripts,
   insertManuscript,
+  listAvailableGalleryYears,
   listCategories,
+  listGalleryEvents,
+  listGalleryImagesForEvent,
   listLanguages,
   listManuscripts,
+  listPublicGalleryImagesByYear,
+  markPdfPageCountsSynced,
+  reorderGalleryImages,
+  replaceGalleryImageAsset,
   shouldSeedInitialManuscripts,
+  shouldSyncPdfPageCounts,
+  updateGalleryEvent,
+  updateGalleryImageMetadata,
   updateManuscript,
+  type GalleryEventRecord,
+  type GalleryEventStatusValue,
+  type GalleryImageMetadataUpdate,
+  type GalleryImageRecord,
+  type GalleryImageWithEventRecord,
   type ManuscriptRecord,
 } from './database';
 
@@ -601,8 +629,418 @@ function decodeBase64Payload(value: unknown): Buffer | undefined {
   return Buffer.from(base64, 'base64');
 }
 
+const GALLERY_STORAGE_DIR = path.join(DATA_DIR, 'gallery');
+const MAX_GALLERY_IMAGE_BYTES = 12 * 1024 * 1024;
+const MAX_GALLERY_IMAGES_PER_UPLOAD = 20;
+const SUPPORTED_GALLERY_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SUPPORTED_GALLERY_IMAGE_FORMATS = new Set(['jpeg', 'png', 'webp']);
+
+class GalleryHttpError extends Error {
+  statusCode: number;
+
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
+const galleryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_GALLERY_IMAGE_BYTES,
+    files: MAX_GALLERY_IMAGES_PER_UPLOAD,
+    fields: 4,
+    fieldSize: 256 * 1024,
+    parts: MAX_GALLERY_IMAGES_PER_UPLOAD + 4,
+  },
+  fileFilter: (_req, file, callback) => {
+    if (!SUPPORTED_GALLERY_IMAGE_TYPES.has(file.mimetype.toLowerCase())) {
+      return callback(new GalleryHttpError(415, 'Only JPEG, PNG, and WebP gallery images are supported.'));
+    }
+    return callback(null, true);
+  },
+});
+
+function withGalleryUpload(middleware: any) {
+  return (req: any, res: any, next: any) => {
+    middleware(req, res, (error: any) => {
+      if (!error) return next();
+      if (error instanceof GalleryHttpError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      if (error instanceof multer.MulterError) {
+        const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+        const message = error.code === 'LIMIT_FILE_SIZE'
+          ? 'Each gallery image must be 12 MB or smaller.'
+          : `Gallery upload failed: ${error.message}`;
+        return res.status(status).json({ error: message });
+      }
+      console.error('Gallery upload middleware failed:', error);
+      return res.status(400).json({ error: 'The gallery upload could not be processed.' });
+    });
+  };
+}
+
+function galleryCurrentYear(): number {
+  return new Date().getFullYear();
+}
+
+function parseGalleryId(value: unknown, label: string): number {
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) {
+    throw new GalleryHttpError(400, `${label} must be a positive integer.`);
+  }
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    throw new GalleryHttpError(400, `${label} must be a positive integer.`);
+  }
+  return id;
+}
+
+function requireGalleryText(value: unknown, label: string, maximumLength: number): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new GalleryHttpError(400, `${label} is required.`);
+  }
+  const normalized = value.trim();
+  if (normalized.length > maximumLength) {
+    throw new GalleryHttpError(400, `${label} must be ${maximumLength} characters or fewer.`);
+  }
+  return normalized;
+}
+
+function optionalGalleryText(value: unknown, label: string, maximumLength: number): string {
+  if (value === undefined || value === null || value === '') return '';
+  if (typeof value !== 'string') {
+    throw new GalleryHttpError(400, `${label} must be text.`);
+  }
+  const normalized = value.trim();
+  if (normalized.length > maximumLength) {
+    throw new GalleryHttpError(400, `${label} must be ${maximumLength} characters or fewer.`);
+  }
+  return normalized;
+}
+
+function parseGalleryEventDate(value: unknown): { eventDate: string; eventYear: number } {
+  if (typeof value !== 'string') {
+    throw new GalleryHttpError(400, 'Event date is required.');
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    throw new GalleryHttpError(400, 'Event date must use the YYYY-MM-DD format.');
+  }
+
+  const eventYear = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(0);
+  parsed.setUTCHours(0, 0, 0, 0);
+  parsed.setUTCFullYear(eventYear, month - 1, day);
+  if (
+    eventYear < 1 ||
+    parsed.getUTCFullYear() !== eventYear ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new GalleryHttpError(400, 'Event date is not a valid calendar date.');
+  }
+  if (eventYear > galleryCurrentYear()) {
+    throw new GalleryHttpError(400, `Gallery events cannot be created for a year after ${galleryCurrentYear()}.`);
+  }
+  return { eventDate: value, eventYear };
+}
+
+function parseGalleryEventInput(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new GalleryHttpError(400, 'Gallery event details are required.');
+  }
+  const input = value as Record<string, unknown>;
+  const { eventDate, eventYear } = parseGalleryEventDate(input.eventDate);
+  if (input.status !== 'ACTIVE' && input.status !== 'INACTIVE') {
+    throw new GalleryHttpError(400, 'Gallery event status must be ACTIVE or INACTIVE.');
+  }
+  return {
+    title: requireGalleryText(input.title, 'Event title', 180),
+    description: optionalGalleryText(input.description, 'Event description', 5000),
+    eventDate,
+    eventYear,
+    status: input.status as GalleryEventStatusValue,
+  };
+}
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function parseGalleryImageInput(value: unknown, partial = false): GalleryImageMetadataUpdate {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new GalleryHttpError(400, 'Image metadata must be an object.');
+  }
+  const input = value as Record<string, unknown>;
+  const parsed: GalleryImageMetadataUpdate = {};
+
+  if (!partial || hasOwn(input, 'caption')) {
+    parsed.caption = requireGalleryText(input.caption, 'Image caption', 500);
+  }
+  if (!partial || hasOwn(input, 'altText')) {
+    parsed.altText = requireGalleryText(input.altText, 'Image alt text', 500);
+  }
+  if (!partial || hasOwn(input, 'displayOrder')) {
+    if (!Number.isInteger(input.displayOrder) || Number(input.displayOrder) < 0 || Number(input.displayOrder) > 1_000_000) {
+      throw new GalleryHttpError(400, 'Image display order must be a non-negative integer.');
+    }
+    parsed.displayOrder = Number(input.displayOrder);
+  }
+  for (const key of ['isFeatured', 'isActive'] as const) {
+    if (!partial || hasOwn(input, key)) {
+      if (typeof input[key] !== 'boolean') {
+        throw new GalleryHttpError(400, `${key} must be true or false.`);
+      }
+      parsed[key] = input[key] as boolean;
+    }
+  }
+  return parsed;
+}
+
+function parseGalleryPagination(query: any): { offset: number; limit: number } {
+  const offset = query.offset === undefined ? 0 : Number(query.offset);
+  const limit = query.limit === undefined ? 48 : Number(query.limit);
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new GalleryHttpError(400, 'Gallery offset must be a non-negative integer.');
+  }
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new GalleryHttpError(400, 'Gallery limit must be between 1 and 100.');
+  }
+  return { offset, limit };
+}
+
+function galleryStorageKey(eventId: number, fileName: string): string {
+  return path.posix.join('gallery', String(eventId), fileName);
+}
+
+function resolveGalleryStoragePath(storageKey: string): string {
+  const normalized = storageKey.replace(/\\/g, '/');
+  if (!normalized.startsWith('gallery/') || path.posix.isAbsolute(normalized)) {
+    throw new Error('Invalid gallery storage path');
+  }
+  const absolutePath = path.resolve(DATA_DIR, ...normalized.split('/'));
+  const root = path.resolve(GALLERY_STORAGE_DIR);
+  const rootPrefix = `${root}${path.sep}`.toLowerCase();
+  if (!absolutePath.toLowerCase().startsWith(rootPrefix)) {
+    throw new Error('Invalid gallery storage path');
+  }
+  return absolutePath;
+}
+
+interface ProcessedGalleryImage {
+  imageUrl: string;
+  thumbnailUrl: string;
+  width: number;
+  height: number;
+}
+
+async function processGalleryImage(eventId: number, file: any): Promise<ProcessedGalleryImage> {
+  if (!file?.buffer || !Buffer.isBuffer(file.buffer)) {
+    throw new GalleryHttpError(400, 'A gallery image file is required.');
+  }
+  if (!SUPPORTED_GALLERY_IMAGE_TYPES.has(String(file.mimetype || '').toLowerCase())) {
+    throw new GalleryHttpError(415, 'Only JPEG, PNG, and WebP gallery images are supported.');
+  }
+
+  let metadata: sharp.Metadata;
+  try {
+    metadata = await sharp(file.buffer, {
+      failOn: 'error',
+      limitInputPixels: false,
+    }).metadata();
+  } catch (error: any) {
+    const reason = String(error?.message || 'unknown decode error');
+    console.warn(`Gallery image validation failed for ${String(file.originalname || 'unnamed image')}: ${reason}`);
+    throw new GalleryHttpError(400, 'One of the selected images could not be decoded. Please use a valid JPEG, PNG, or WebP file.');
+  }
+  if (!metadata.format || !SUPPORTED_GALLERY_IMAGE_FORMATS.has(metadata.format)) {
+    throw new GalleryHttpError(415, 'Only decoded JPEG, PNG, and WebP images are supported.');
+  }
+  if (
+    !metadata.width || !metadata.height
+  ) {
+    throw new GalleryHttpError(400, 'Gallery image dimensions are invalid.');
+  }
+
+  const eventDirectory = path.join(GALLERY_STORAGE_DIR, String(eventId));
+  await fs.promises.mkdir(eventDirectory, { recursive: true });
+  const token = randomUUID();
+  const imageUrl = galleryStorageKey(eventId, `${token}-full.webp`);
+  const thumbnailUrl = galleryStorageKey(eventId, `${token}-thumb.webp`);
+  const fullPath = resolveGalleryStoragePath(imageUrl);
+  const thumbnailPath = resolveGalleryStoragePath(thumbnailUrl);
+
+  try {
+    const source = sharp(file.buffer, {
+      failOn: 'error',
+      limitInputPixels: false,
+    }).rotate();
+    const fullInfo = await source
+      .clone()
+      .resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 88, effort: 4 })
+      .toFile(fullPath);
+    await source
+      .clone()
+      .resize({ width: 960, height: 960, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 80, effort: 4 })
+      .toFile(thumbnailPath);
+    return {
+      imageUrl,
+      thumbnailUrl,
+      width: fullInfo.width,
+      height: fullInfo.height,
+    };
+  } catch (error) {
+    await deleteStoredGalleryAssets([imageUrl, thumbnailUrl]);
+    if (error instanceof GalleryHttpError) throw error;
+    throw new GalleryHttpError(400, 'One of the selected gallery images could not be processed.');
+  }
+}
+
+async function deleteStoredGalleryAssets(storageKeys: Array<string | undefined>): Promise<void> {
+  for (const storageKey of storageKeys) {
+    if (!storageKey) continue;
+    try {
+      await fs.promises.unlink(resolveGalleryStoragePath(storageKey));
+    } catch (error: any) {
+      if (error?.code !== 'ENOENT') {
+        console.warn(`Could not remove gallery asset ${storageKey}:`, error);
+      }
+    }
+  }
+}
+
+async function removeGalleryEventDirectoryIfEmpty(eventId: number): Promise<void> {
+  const eventDirectory = path.join(GALLERY_STORAGE_DIR, String(eventId));
+  try {
+    await fs.promises.rmdir(eventDirectory);
+  } catch (error: any) {
+    if (error?.code !== 'ENOENT' && error?.code !== 'ENOTEMPTY') {
+      console.warn(`Could not remove gallery event directory ${eventId}:`, error);
+    }
+  }
+}
+
+function galleryImageResponse(image: GalleryImageRecord) {
+  const version = encodeURIComponent(image.updatedAt);
+  return {
+    ...image,
+    imageUrl: `/api/gallery/images/${image.id}/file?v=${version}`,
+    thumbnailUrl: `/api/gallery/images/${image.id}/thumbnail?v=${version}`,
+  };
+}
+
+function galleryEventResponse(event: GalleryEventRecord, includeInactiveImages: boolean) {
+  const images = listGalleryImagesForEvent(event.id, includeInactiveImages).map(galleryImageResponse);
+  return { ...event, images, imageCount: images.length };
+}
+
+function buildGalleryYearResponse(year: number, offset: number, limit: number) {
+  const rows = listPublicGalleryImagesByYear(year, limit, offset);
+  const eventsById = new Map<number, any>();
+  for (const row of rows) {
+    let event = eventsById.get(row.eventId);
+    if (!event) {
+      event = {
+        id: row.eventId,
+        title: row.eventTitle,
+        description: row.eventDescription,
+        eventDate: row.eventDate,
+        eventYear: row.eventYear,
+        status: row.eventStatus,
+        createdAt: row.eventCreatedAt,
+        updatedAt: row.eventUpdatedAt,
+        images: [],
+      };
+      eventsById.set(row.eventId, event);
+    }
+    event.images.push(galleryImageResponse(row));
+  }
+  const events = [...eventsById.values()].map(event => ({ ...event, imageCount: event.images.length }));
+  const totalImages = countPublicGalleryImagesByYear(year);
+  return {
+    year,
+    events,
+    totalImages,
+    hasMore: offset + rows.length < totalImages,
+  };
+}
+
+function sendGalleryRouteError(res: any, error: unknown, operation: string) {
+  if (error instanceof GalleryHttpError) {
+    return res.status(error.statusCode).json({ error: error.message });
+  }
+  console.error(`Gallery ${operation} failed:`, error);
+  return res.status(500).json({ error: `Failed to ${operation}.` });
+}
+
+async function serveGalleryAsset(req: any, res: any, thumbnail: boolean) {
+  try {
+    const id = parseGalleryId(req.params.id, 'Gallery image ID');
+    const image = getGalleryImageWithEvent(id);
+    const isPublic = image?.eventStatus === 'ACTIVE' && image.isActive;
+    if (!image || (!isPublic && !resolveAdminRequest(req))) {
+      return res.status(404).send('Gallery image not found');
+    }
+
+    const assetPath = resolveGalleryStoragePath(thumbnail ? image.thumbnailUrl : image.imageUrl);
+    const stats = await fs.promises.stat(assetPath);
+    if (!stats.isFile()) return res.status(404).send('Gallery image not found');
+
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader(
+      'Cache-Control',
+      isPublic ? 'public, max-age=31536000, immutable' : 'private, no-store',
+    );
+    return res.sendFile(assetPath);
+  } catch (error: any) {
+    if (error instanceof GalleryHttpError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    if (error?.code === 'ENOENT') return res.status(404).send('Gallery image not found');
+    console.error('Gallery image delivery failed:', error);
+    return res.status(500).send('Gallery image could not be delivered');
+  }
+}
+
+async function detectPdfPageCount(pdfData: Buffer): Promise<number> {
+  const pdf = await PDFDocument.load(pdfData);
+  const pageCount = pdf.getPageCount();
+  if (pageCount < 1) throw new Error('The uploaded PDF has no pages');
+  return pageCount;
+}
+
+async function syncExistingPdfPageCounts() {
+  if (!shouldSyncPdfPageCounts()) return;
+
+  const manuscripts = listManuscripts({ includeUnpublished: true });
+  for (const manuscript of manuscripts) {
+    const pdf = getManuscriptPdf(manuscript.id);
+    if (!pdf) continue;
+
+    try {
+      const detectedPageCount = await detectPdfPageCount(pdf.data);
+      if (detectedPageCount !== manuscript.pageCount) {
+        updateManuscript({ ...manuscript, pageCount: detectedPageCount });
+      }
+    } catch (error) {
+      console.warn(`Could not detect pages for manuscript ${manuscript.id}:`, error);
+    }
+  }
+
+  markPdfPageCountsSynced();
+}
+
 async function startServer() {
   await seedInitialManuscripts();
+  await syncExistingPdfPageCounts();
+  await fs.promises.mkdir(GALLERY_STORAGE_DIR, { recursive: true });
 
   const app = express();
 
@@ -693,6 +1131,236 @@ async function startServer() {
     return res.json({ success: true });
   });
 
+  // --- YEAR-WISE EVENT GALLERY ---
+
+  app.get('/api/gallery/years', (_req, res) => {
+    return res.json({ years: listAvailableGalleryYears(galleryCurrentYear()) });
+  });
+
+  app.get('/api/gallery', (req, res) => {
+    try {
+      const yearValue = req.query.year;
+      if (typeof yearValue !== 'string' || !/^\d{4}$/.test(yearValue)) {
+        throw new GalleryHttpError(400, 'A valid four-digit gallery year is required.');
+      }
+      const year = Number(yearValue);
+      if (year < 1 || year > galleryCurrentYear()) {
+        throw new GalleryHttpError(400, `Gallery year must not be later than ${galleryCurrentYear()}.`);
+      }
+      const { offset, limit } = parseGalleryPagination(req.query);
+      return res.json(buildGalleryYearResponse(year, offset, limit));
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'load gallery');
+    }
+  });
+
+  app.get('/api/gallery/current', (_req, res) => {
+    try {
+      const year = galleryCurrentYear();
+      return res.json(buildGalleryYearResponse(year, 0, 24));
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'load the current-year gallery');
+    }
+  });
+
+  app.get('/api/gallery/events', (req, res) => {
+    const sendEvents = (includeInactive: boolean) => {
+      const events = listGalleryEvents(includeInactive)
+        .map(event => galleryEventResponse(event, includeInactive));
+      return res.json(events);
+    };
+
+    if (req.query.isAdmin === 'true') {
+      return authenticateAdminToken(req, res, () => sendEvents(true));
+    }
+    return sendEvents(false);
+  });
+
+  app.get('/api/gallery/events/:id', (req, res) => {
+    try {
+      const id = parseGalleryId(req.params.id, 'Gallery event ID');
+      const event = getGalleryEvent(id);
+      const isAdmin = Boolean(resolveAdminRequest(req));
+      if (!event || (event.status !== 'ACTIVE' && !isAdmin)) {
+        return res.status(404).json({ error: 'Gallery event not found' });
+      }
+      return res.json(galleryEventResponse(event, isAdmin));
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'load gallery event');
+    }
+  });
+
+  app.post('/api/gallery/events', authenticateAdminToken, (req, res) => {
+    try {
+      const event = insertGalleryEvent(parseGalleryEventInput(req.body));
+      return res.status(201).json({ ...event, images: [], imageCount: 0 });
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'create gallery event');
+    }
+  });
+
+  app.put('/api/gallery/events/:id', authenticateAdminToken, (req, res) => {
+    try {
+      const id = parseGalleryId(req.params.id, 'Gallery event ID');
+      if (!getGalleryEvent(id)) return res.status(404).json({ error: 'Gallery event not found' });
+      const updated = updateGalleryEvent(id, parseGalleryEventInput(req.body));
+      if (!updated) return res.status(404).json({ error: 'Gallery event not found' });
+      return res.json(galleryEventResponse(updated, true));
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'update gallery event');
+    }
+  });
+
+  app.delete('/api/gallery/events/:id', authenticateAdminToken, async (req, res) => {
+    try {
+      const id = parseGalleryId(req.params.id, 'Gallery event ID');
+      const event = getGalleryEvent(id);
+      if (!event) return res.status(404).json({ error: 'Gallery event not found' });
+      const images = listGalleryImagesForEvent(id, true);
+      if (!deleteGalleryEvent(id)) return res.status(404).json({ error: 'Gallery event not found' });
+      await deleteStoredGalleryAssets(images.flatMap(image => [image.imageUrl, image.thumbnailUrl]));
+      await removeGalleryEventDirectoryIfEmpty(id);
+      return res.json({ success: true });
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'delete gallery event');
+    }
+  });
+
+  app.post(
+    '/api/gallery/events/:id/images',
+    authenticateAdminToken,
+    withGalleryUpload(galleryUpload.array('images', MAX_GALLERY_IMAGES_PER_UPLOAD)),
+    async (req: any, res) => {
+      const processed: ProcessedGalleryImage[] = [];
+      try {
+        const eventId = parseGalleryId(req.params.id, 'Gallery event ID');
+        if (!getGalleryEvent(eventId)) return res.status(404).json({ error: 'Gallery event not found' });
+        const files = Array.isArray(req.files) ? req.files : [];
+        if (!files.length) throw new GalleryHttpError(400, 'Select at least one gallery image.');
+
+        let rawMetadata: unknown;
+        try {
+          rawMetadata = JSON.parse(String(req.body?.metadata || ''));
+        } catch {
+          throw new GalleryHttpError(400, 'Gallery image metadata must be valid JSON.');
+        }
+        if (!Array.isArray(rawMetadata) || rawMetadata.length !== files.length) {
+          throw new GalleryHttpError(400, 'Metadata must be supplied for every uploaded image.');
+        }
+        const metadata = rawMetadata.map(value => parseGalleryImageInput(value, false));
+
+        for (const file of files) {
+          processed.push(await processGalleryImage(eventId, file));
+        }
+        const inserted = insertGalleryImages(processed.map((asset, index) => ({
+          eventId,
+          imageUrl: asset.imageUrl,
+          thumbnailUrl: asset.thumbnailUrl,
+          caption: metadata[index].caption!,
+          altText: metadata[index].altText!,
+          displayOrder: metadata[index].displayOrder!,
+          isFeatured: Boolean(metadata[index].isFeatured && metadata[index].isActive),
+          isActive: metadata[index].isActive!,
+          width: asset.width,
+          height: asset.height,
+        })));
+        return res.status(201).json(inserted.map(galleryImageResponse));
+      } catch (error) {
+        await deleteStoredGalleryAssets(processed.flatMap(asset => [asset.imageUrl, asset.thumbnailUrl]));
+        return sendGalleryRouteError(res, error, 'upload gallery images');
+      }
+    },
+  );
+
+  app.put('/api/gallery/images/:id', authenticateAdminToken, (req, res) => {
+    try {
+      const id = parseGalleryId(req.params.id, 'Gallery image ID');
+      if (!getGalleryImage(id)) return res.status(404).json({ error: 'Gallery image not found' });
+      const changes = parseGalleryImageInput(req.body, true);
+      const updated = updateGalleryImageMetadata(id, changes);
+      if (!updated) return res.status(404).json({ error: 'Gallery image not found' });
+      return res.json(galleryImageResponse(updated));
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'update gallery image');
+    }
+  });
+
+  app.post(
+    '/api/gallery/images/:id/replace',
+    authenticateAdminToken,
+    withGalleryUpload(galleryUpload.single('image')),
+    async (req: any, res) => {
+      let processed: ProcessedGalleryImage | undefined;
+      try {
+        const id = parseGalleryId(req.params.id, 'Gallery image ID');
+        const current = getGalleryImage(id);
+        if (!current) return res.status(404).json({ error: 'Gallery image not found' });
+        if (!req.file) throw new GalleryHttpError(400, 'Select a replacement gallery image.');
+
+        processed = await processGalleryImage(current.eventId, req.file);
+        const updated = replaceGalleryImageAsset(
+          id,
+          processed.imageUrl,
+          processed.thumbnailUrl,
+          processed.width,
+          processed.height,
+        );
+        if (!updated) {
+          await deleteStoredGalleryAssets([processed.imageUrl, processed.thumbnailUrl]);
+          return res.status(404).json({ error: 'Gallery image not found' });
+        }
+        await deleteStoredGalleryAssets([current.imageUrl, current.thumbnailUrl]);
+        return res.json(galleryImageResponse(updated));
+      } catch (error) {
+        if (processed) await deleteStoredGalleryAssets([processed.imageUrl, processed.thumbnailUrl]);
+        return sendGalleryRouteError(res, error, 'replace gallery image');
+      }
+    },
+  );
+
+  app.put('/api/gallery/events/:id/images/reorder', authenticateAdminToken, (req, res) => {
+    try {
+      const eventId = parseGalleryId(req.params.id, 'Gallery event ID');
+      if (!getGalleryEvent(eventId)) return res.status(404).json({ error: 'Gallery event not found' });
+      const imageIds = req.body?.imageIds;
+      if (
+        !Array.isArray(imageIds) ||
+        imageIds.some((id: unknown) => !Number.isSafeInteger(id) || Number(id) < 1)
+      ) {
+        throw new GalleryHttpError(400, 'imageIds must be an array of positive integer IDs.');
+      }
+      const existingIds = listGalleryImagesForEvent(eventId, true).map(image => image.id);
+      const suppliedIds = new Set<number>(imageIds);
+      if (
+        suppliedIds.size !== imageIds.length ||
+        imageIds.length !== existingIds.length ||
+        existingIds.some(id => !suppliedIds.has(id))
+      ) {
+        throw new GalleryHttpError(400, 'Image order must contain every image in this event exactly once.');
+      }
+      return res.json(reorderGalleryImages(eventId, imageIds).map(galleryImageResponse));
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'reorder gallery images');
+    }
+  });
+
+  app.delete('/api/gallery/images/:id', authenticateAdminToken, async (req, res) => {
+    try {
+      const id = parseGalleryId(req.params.id, 'Gallery image ID');
+      const image = getGalleryImage(id);
+      if (!image) return res.status(404).json({ error: 'Gallery image not found' });
+      if (!deleteGalleryImage(id)) return res.status(404).json({ error: 'Gallery image not found' });
+      await deleteStoredGalleryAssets([image.imageUrl, image.thumbnailUrl]);
+      await removeGalleryEventDirectoryIfEmpty(image.eventId);
+      return res.json({ success: true });
+    } catch (error) {
+      return sendGalleryRouteError(res, error, 'delete gallery image');
+    }
+  });
+
+  app.get('/api/gallery/images/:id/file', (req, res) => serveGalleryAsset(req, res, false));
+  app.get('/api/gallery/images/:id/thumbnail', (req, res) => serveGalleryAsset(req, res, true));
+
   // List Manuscripts
   app.get('/api/manuscripts', (req, res, next) => {
     const { search, category, language, yearFrom, yearTo, status, sortBy, isAdmin } = req.query;
@@ -776,7 +1444,6 @@ async function startServer() {
         language,
         year,
         keywords,
-        pageCount,
         status,
         coverData,
         coverType,
@@ -808,6 +1475,8 @@ async function startServer() {
         );
       }
 
+      const detectedPageCount = await detectPdfPageCount(pdfBuffer);
+
       const newRecord = insertManuscript({
         title: String(title).trim(),
         author: author || 'Unknown Scribe',
@@ -816,7 +1485,7 @@ async function startServer() {
         language: language || 'Sanskrit',
         year: Number(year) || 1000,
         keywords: keywords || '',
-        pageCount: Math.max(1, Number(pageCount) || 1),
+        pageCount: detectedPageCount,
         fileName: actualFileName,
         mimeType: mimeType || 'application/pdf',
         coverType: coverType || 'image/jpeg',
@@ -848,7 +1517,6 @@ async function startServer() {
         language,
         year,
         keywords,
-        pageCount,
         status,
         coverData,
         coverType,
@@ -861,6 +1529,11 @@ async function startServer() {
         return res.status(400).json({ error: 'Invalid manuscript status' });
       }
 
+      const uploadedPdfBuffer = decodeBase64Payload(pdfData);
+      const detectedPageCount = uploadedPdfBuffer
+        ? await detectPdfPageCount(uploadedPdfBuffer)
+        : current.pageCount;
+
       const record: ManuscriptRecord = {
         ...current,
         title: title !== undefined ? title : current.title,
@@ -870,7 +1543,7 @@ async function startServer() {
         language: language !== undefined ? language : current.language,
         year: year !== undefined ? Number(year) : current.year,
         keywords: keywords !== undefined ? keywords : current.keywords,
-        pageCount: pageCount !== undefined ? Math.max(1, Number(pageCount) || 1) : current.pageCount,
+        pageCount: detectedPageCount,
         fileName: fileName !== undefined ? sanitizeFileName(fileName, current.fileName) : current.fileName,
         mimeType: mimeType !== undefined ? mimeType : current.mimeType,
         coverType: coverType !== undefined ? coverType : current.coverType,
@@ -878,7 +1551,7 @@ async function startServer() {
         updatedAt: new Date().toISOString(),
       };
 
-      const updated = updateManuscript(record, decodeBase64Payload(pdfData), decodeBase64Payload(coverData));
+      const updated = updateManuscript(record, uploadedPdfBuffer, decodeBase64Payload(coverData));
       return res.json(updated);
     } catch (e: any) {
       console.error('Error updating manuscript:', e);

@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage';
 import { CataloguePage } from './pages/CataloguePage';
 import { DetailPage } from './pages/DetailPage';
 import { AboutPage } from './pages/AboutPage';
+import { GalleryPage } from './pages/GalleryPage';
 import { AdminLoginPage } from './pages/AdminLoginPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Manuscript, Category, Language, FilterState, AdminUser } from './types';
@@ -177,6 +178,8 @@ export default function App() {
         )}
 
         {currentTab === 'about' && <AboutPage onNavigate={handleNavigate} />}
+
+        {currentTab === 'gallery' && <GalleryPage />}
 
         {currentTab === 'admin-login' && (
           <AdminLoginPage

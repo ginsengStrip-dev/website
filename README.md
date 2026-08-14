@@ -21,6 +21,13 @@ SQLite stores:
 - categories and languages
 - administrator accounts with bcrypt password hashes
 
+The Event Gallery keeps relational event and image metadata in the same SQLite database. Optimized WebP display images and thumbnails are stored under `.data/gallery`, with only relative storage paths saved in SQLite.
+
 On the first database startup, existing `.data/*.json`, `.data/pdfs`, and `.data/covers` content is imported transactionally. The legacy files are left in place as a backup and are not read again after the database contains manuscripts.
 
+## Production
+
+Build with `npm.cmd run build` and start with `npm.cmd start`.
+
+Deploy the complete `.data` directory on persistent storage and run one application instance. Backups must include both `.data/archive.sqlite` and `.data/gallery`. For multiple instances or ephemeral hosting, move the database and Gallery assets to shared services first.
 

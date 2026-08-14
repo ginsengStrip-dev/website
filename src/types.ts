@@ -62,6 +62,59 @@ export interface AdminUser {
   role: 'ADMIN' | 'SUPER_ADMIN';
 }
 
+export type GalleryEventStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface GalleryImage {
+  id: number;
+  eventId: number;
+  imageUrl: string;
+  thumbnailUrl: string;
+  caption: string;
+  altText: string;
+  displayOrder: number;
+  isFeatured: boolean;
+  isActive: boolean;
+  width?: number;
+  height?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GalleryEvent {
+  id: number;
+  title: string;
+  description: string;
+  eventDate: string;
+  eventYear: number;
+  status: GalleryEventStatus;
+  createdAt: string;
+  updatedAt: string;
+  images: GalleryImage[];
+  imageCount?: number;
+}
+
+export interface GalleryEventInput {
+  title: string;
+  description?: string;
+  eventDate: string;
+  status: GalleryEventStatus;
+}
+
+export interface GalleryImageInput {
+  caption: string;
+  altText: string;
+  displayOrder: number;
+  isFeatured: boolean;
+  isActive: boolean;
+}
+
+export interface GalleryYearResponse {
+  year: number;
+  events: GalleryEvent[];
+  totalImages: number;
+  hasMore: boolean;
+}
+
 export interface FilterState {
   search: string;
   category: string;
