@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   BookOpen,
   Search,
   Sparkles,
   ArrowRight,
   ShieldCheck,
-  Globe,
-  Calendar,
-  Tag,
-  Clock,
+  Camera,
+  Landmark,
+  ScrollText,
+  HeartHandshake,
+  Archive,
   CheckCircle2,
-  Bookmark,
-  Layers,
-  Award
+  Library,
+  ScanLine,
+  MapPin,
 } from 'lucide-react';
+
 import { Manuscript, Category, Language } from '../types';
 import { ManuscriptCard } from '../components/ManuscriptCard';
 
@@ -37,10 +39,10 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [heroSearch, setHeroSearch] = useState<string>('');
 
   const featured = manuscripts.slice(0, 3);
-  const recentlyAdded = manuscripts.slice(0, 4);
 
   const handleHeroSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
     if (heroSearch.trim()) {
       onSearchQuery(heroSearch.trim());
       onNavigate('catalogue');
@@ -48,206 +50,561 @@ export const HomePage: React.FC<HomePageProps> = ({
   };
 
   return (
-    <div className="space-y-16 pb-12">
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-b from-[#2b2016] via-[#241a11] to-[#1c140c] text-amber-50 py-20 px-4 sm:px-6 lg:px-8 overflow-hidden rounded-b-3xl shadow-xl border-b border-amber-900/50">
-        {/* Subtle background parchment motif */}
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#d97706_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+    <div className="space-y-20 pb-16">
 
-        <div className="max-w-5xl mx-auto text-center space-y-8 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-900/60 border border-amber-600/40 text-amber-200 text-xs font-semibold uppercase tracking-widest shadow-inner">
+      {/* =========================================================
+          HERO
+      ========================================================= */}
+      <section className="relative bg-gradient-to-b from-[#2d2117] via-[#241a11] to-[#1b130c] text-amber-50 min-h-[650px] flex items-center px-4 sm:px-6 lg:px-8 overflow-hidden rounded-b-[2.5rem] shadow-xl border-b border-amber-900/50">
+
+        {/* Background texture */}
+        <div className="absolute inset-0 opacity-[0.08] bg-[radial-gradient(#f59e0b_1px,transparent_1px)] [background-size:18px_18px] pointer-events-none" />
+
+        {/* Soft glow */}
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-amber-500/10 blur-[140px] rounded-full pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto text-center relative z-10 space-y-8">
+
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-900/50 border border-amber-600/30 text-amber-200 text-[10px] sm:text-xs font-bold uppercase tracking-[0.18em]">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Digital Preservation & Open Knowledge Platform</span>
+            <span>Manuscript Conservation & Digital Preservation</span>
           </div>
 
-          <h1 className="font-serif font-bold text-4xl sm:text-5xl md:text-6xl tracking-tight text-amber-100 leading-tight">
-            Preserving History's Rare Manuscripts for Global Readers
-          </h1>
+          <div className="space-y-4">
+            <p className="font-serif text-amber-400 text-sm sm:text-base tracking-wide">
+              Medhijan Shri Shri Gajala Satra · Sivasagar, Assam
+            </p>
 
-          <p className="text-sm sm:text-base md:text-lg text-amber-200/80 max-w-3xl mx-auto font-sans leading-relaxed">
-            Explore centuries of human wisdom, medical codices, astronomical treatises, and epic poetry digitized directly into binary records and readable online for free.
+            <h1 className="font-serif font-bold text-4xl sm:text-5xl md:text-7xl tracking-tight text-amber-50 leading-[1.08] max-w-5xl mx-auto">
+              Preserving Centuries of
+              <span className="block text-amber-300">
+                Written Heritage
+              </span>
+            </h1>
+          </div>
+
+          <p className="text-sm sm:text-base md:text-lg text-amber-200/80 max-w-3xl mx-auto leading-relaxed">
+            A digital initiative documenting, conserving and safeguarding the
+            historic manuscript collection of Medhijan Shri Shri Gajala Satra.
+            Following damage to fragile manuscripts, conservation specialists
+            and researchers are working to preserve these invaluable records
+            and create a lasting digital archive for future generations.
           </p>
 
-          {/* Search Box */}
-          <form onSubmit={handleHeroSubmit} className="max-w-2xl mx-auto relative group">
-            <div className="relative flex items-center bg-[#fbf8f1] rounded-2xl p-2 shadow-2xl border border-amber-700/50">
-              <Search className="w-6 h-6 text-amber-800 ml-3 shrink-0" />
+          {/* Actions */}
+          <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
+            <button
+              onClick={() => onNavigate('catalogue')}
+              className="px-6 py-3.5 rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-lg"
+            >
+              <BookOpen className="w-4 h-4" />
+              Explore the Manuscripts
+            </button>
+
+            <button
+              onClick={() => onNavigate('gallery')}
+              className="px-6 py-3.5 rounded-xl border border-amber-600/50 bg-amber-950/30 hover:bg-amber-900/50 text-amber-100 text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2"
+            >
+              <Camera className="w-4 h-4" />
+              View Conservation Gallery
+            </button>
+          </div>
+
+          {/* Search */}
+          <form
+            onSubmit={handleHeroSubmit}
+            className="max-w-2xl mx-auto relative pt-4"
+          >
+            <div className="relative flex items-center bg-[#fbf8f1] rounded-2xl p-2 shadow-2xl border border-amber-700/40">
+
+              <Search className="w-5 h-5 text-amber-800 ml-3 shrink-0" />
+
               <input
                 type="text"
                 value={heroSearch}
-                onChange={e => setHeroSearch(e.target.value)}
-                placeholder="Search manuscripts by title (e.g., Sushruta, Surya Siddhanta, Tirukkural)..."
-                className="w-full px-4 py-3 bg-transparent text-amber-950 placeholder-amber-900/50 font-sans text-sm sm:text-base focus:outline-none"
+                onChange={(e) => setHeroSearch(e.target.value)}
+                placeholder="Search the manuscript collection..."
+                className="w-full px-4 py-3 bg-transparent text-amber-950 placeholder-amber-900/40 text-sm focus:outline-none"
               />
+
               <button
                 type="submit"
-                className="px-6 py-3 rounded-xl bg-amber-900 hover:bg-amber-800 text-amber-100 text-sm font-semibold transition-all shrink-0 flex items-center gap-2 shadow-md"
+                className="px-5 py-3 rounded-xl bg-amber-900 hover:bg-amber-800 text-amber-100 text-xs font-bold transition-all shrink-0 flex items-center gap-2"
               >
-                <span>Search Archives</span>
+                Search
                 <ArrowRight className="w-4 h-4" />
               </button>
+
             </div>
           </form>
+        </div>
+      </section>
 
-          {/* Quick Stats Grid */}
-          <div className="pt-6 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-amber-800/40 text-left">
-            <div className="bg-amber-950/40 p-4 rounded-xl border border-amber-800/30">
-              <span className="font-serif font-bold text-2xl text-amber-300 block">{manuscripts.length}+</span>
-              <span className="text-xs text-amber-200/70 font-medium">Preserved Manuscripts</span>
+
+      {/* =========================================================
+          INTRODUCTION / SATRA
+      ========================================================= */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+
+          <div className="space-y-5">
+
+            <div className="flex items-center gap-2 text-amber-800">
+              <Landmark className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.22em]">
+                A Living Heritage Collection
+              </span>
             </div>
-            <div className="bg-amber-950/40 p-4 rounded-xl border border-amber-800/30">
-              <span className="font-serif font-bold text-2xl text-amber-300 block">{languages.length}</span>
-              <span className="text-xs text-amber-200/70 font-medium">Classical Languages</span>
+
+            <h2 className="font-serif font-bold text-3xl sm:text-4xl text-amber-950 leading-tight">
+              The Manuscripts of
+              <span className="block">
+                Medhijan Shri Shri Gajala Satra
+              </span>
+            </h2>
+
+            <p className="text-sm text-amber-900/80 leading-relaxed">
+              For generations, the Satra has safeguarded manuscripts carrying
+              religious, literary, historical and cultural knowledge. Written
+              and preserved long before modern archival systems existed, these
+              manuscripts constitute an important part of Assam&apos;s written
+              heritage.
+            </p>
+
+            <p className="text-sm text-amber-900/80 leading-relaxed">
+              Age, environmental exposure and recent flood damage have made
+              several manuscripts increasingly fragile. The present initiative
+              combines physical conservation with systematic digitisation so
+              that the knowledge contained within these works can survive even
+              as the original material continues to age.
+            </p>
+
+            <button
+              onClick={() => onNavigate('about')}
+              className="inline-flex items-center gap-2 text-xs font-bold text-amber-900 hover:text-amber-700 transition-colors pt-2"
+            >
+              Learn about the preservation initiative
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+          </div>
+
+          {/* Visual placeholder */}
+          <div className="relative">
+
+            <div className="aspect-[4/3] rounded-3xl overflow-hidden bg-[#e7dccb] border border-[#d9c8b5] shadow-xl">
+
+              <img
+                src="/images/satra/satra-main.jpg"
+                alt="Medhijan Shri Shri Gajala Satra"
+                className="w-full h-full object-cover"
+              />
+
             </div>
-            <div className="bg-amber-950/40 p-4 rounded-xl border border-amber-800/30">
-              <span className="font-serif font-bold text-2xl text-amber-300 block">100%</span>
-              <span className="text-xs text-amber-200/70 font-medium">Free Digital Access</span>
+
+            <div className="absolute -bottom-5 left-5 right-5 sm:right-auto sm:w-[70%] bg-[#241a11]/95 backdrop-blur-sm text-amber-100 rounded-2xl p-5 border border-amber-700/30 shadow-xl">
+
+              <div className="flex items-start gap-3">
+
+                <MapPin className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+
+                <div>
+                  <p className="font-serif font-bold text-sm">
+                    Medhijan Shri Shri Gajala Satra
+                  </p>
+
+                  <p className="text-[11px] text-amber-200/70 mt-1">
+                    Sivasagar, Assam
+                  </p>
+                </div>
+
+              </div>
+
             </div>
-            <div className="bg-amber-950/40 p-4 rounded-xl border border-amber-800/30">
-              <span className="font-serif font-bold text-2xl text-amber-300 block">BLOB</span>
-              <span className="text-xs text-amber-200/70 font-medium">SQLite PDF Storage</span>
-            </div>
+
           </div>
         </div>
       </section>
 
-      {/* Featured Manuscripts */}
+
+      {/* =========================================================
+          COLLECTION HIGHLIGHTS
+      ========================================================= */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div className="bg-[#f5eee3] border border-[#dfd1c0] rounded-3xl px-6 py-8 sm:px-10">
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+
+            <div>
+              <span className="font-serif font-bold text-3xl text-amber-900 block">
+                {manuscripts.length}+
+              </span>
+              <span className="text-xs text-amber-900/60">
+                Digitally Catalogued
+              </span>
+            </div>
+
+            <div>
+              <span className="font-serif font-bold text-3xl text-amber-900 block">
+                {categories.length}
+              </span>
+              <span className="text-xs text-amber-900/60">
+                Collection Categories
+              </span>
+            </div>
+
+            <div>
+              <span className="font-serif font-bold text-3xl text-amber-900 block">
+                {languages.length}
+              </span>
+              <span className="text-xs text-amber-900/60">
+                Languages / Scripts
+              </span>
+            </div>
+
+            <div>
+              <span className="font-serif font-bold text-3xl text-amber-900 block">
+                Sanchipat
+              </span>
+              <span className="text-xs text-amber-900/60">
+                Historic Manuscript Tradition
+              </span>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+
+      {/* =========================================================
+          FEATURED MANUSCRIPTS
+      ========================================================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-amber-200/80 pb-4">
+
           <div>
-            <span className="text-xs font-bold text-amber-800 uppercase tracking-widest block mb-1">
-              Curated Highlights
+            <span className="text-[10px] font-bold text-amber-800 uppercase tracking-[0.22em] block mb-2">
+              From the Collection
             </span>
+
             <h2 className="font-serif font-bold text-2xl sm:text-3xl text-amber-950">
-              Featured Ancient Treatises
+              Featured Manuscripts
             </h2>
           </div>
+
           <button
             onClick={() => onNavigate('catalogue')}
-            className="text-xs font-bold text-amber-900 hover:text-amber-700 flex items-center gap-1 transition-colors"
+            className="text-xs font-bold text-amber-900 hover:text-amber-700 flex items-center gap-1"
           >
-            <span>Browse All Collections</span>
+            Browse the Complete Collection
             <ArrowRight className="w-4 h-4" />
           </button>
+
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {featured.map(m => (
-            <ManuscriptCard
-              key={m.id}
-              manuscript={m}
-              onRead={onRead}
-              onViewDetails={id => onNavigate('detail', id)}
-            />
-          ))}
+        {featured.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {featured.map((manuscript) => (
+              <ManuscriptCard
+                key={manuscript.id}
+                manuscript={manuscript}
+                onRead={onRead}
+                onViewDetails={(id) => onNavigate('detail', id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-[#fbf8f1] border border-[#e5dcd0] rounded-2xl p-10 text-center">
+            <ScrollText className="w-8 h-8 mx-auto text-amber-700 mb-3" />
+            <p className="text-sm text-amber-900/70">
+              Manuscripts are currently being catalogued for the digital archive.
+            </p>
+          </div>
+        )}
+
+      </section>
+
+
+      {/* =========================================================
+          CONSERVATION STORY
+      ========================================================= */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div className="bg-[#241a11] text-amber-100 rounded-3xl p-8 sm:p-12 shadow-xl border border-amber-900/50">
+
+          <div className="max-w-3xl mb-9">
+
+            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-[0.22em]">
+              From Recovery to Preservation
+            </span>
+
+            <h2 className="font-serif font-bold text-3xl sm:text-4xl text-amber-50 mt-3">
+              A Manuscript Conservation Mission
+            </h2>
+
+            <p className="text-sm text-amber-200/75 leading-relaxed mt-4">
+              Floodwater and prolonged moisture exposed parts of the Satra&apos;s
+              manuscript collection to deterioration. Conservation specialists
+              are now carefully recovering, separating, cleaning, stabilising
+              and documenting fragile manuscript folios before their
+              digitisation and long-term preservation.
+            </p>
+
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+            {[
+              {
+                number: '01',
+                title: 'Recovery',
+                description:
+                  'Identification and assessment of manuscripts affected by environmental and flood damage.',
+              },
+              {
+                number: '02',
+                title: 'Conservation',
+                description:
+                  'Careful separation, cleaning, drying and stabilisation of fragile manuscript folios.',
+              },
+              {
+                number: '03',
+                title: 'Digitisation',
+                description:
+                  'Creation of high-quality digital representations after the manuscripts are stabilised.',
+              },
+              {
+                number: '04',
+                title: 'Digital Archive',
+                description:
+                  'Cataloguing and structured preservation of manuscript records for long-term access.',
+              },
+            ].map((step) => (
+              <div
+                key={step.number}
+                className="rounded-2xl border border-amber-800/40 bg-white/[0.035] p-5"
+              >
+                <span className="font-serif text-2xl text-amber-500">
+                  {step.number}
+                </span>
+
+                <h3 className="font-serif font-bold text-base text-amber-50 mt-3">
+                  {step.title}
+                </h3>
+
+                <p className="text-[11px] text-amber-200/65 leading-relaxed mt-2">
+                  {step.description}
+                </p>
+              </div>
+            ))}
+
+          </div>
+
+          <div className="pt-8">
+
+            <button
+              onClick={() => onNavigate('gallery')}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-800 hover:bg-amber-700 text-amber-50 text-xs font-bold transition-all"
+            >
+              <Camera className="w-4 h-4" />
+              View the Conservation Journey
+            </button>
+
+          </div>
+
         </div>
       </section>
 
-      {/* Category Explorer */}
+
+      {/* =========================================================
+          COLLECTION CATEGORIES
+      ========================================================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <div className="text-center space-y-2">
-          <span className="text-xs font-bold text-amber-800 uppercase tracking-widest block">
-            Explore By Domain
+
+        <div className="text-center max-w-2xl mx-auto">
+
+          <span className="text-[10px] font-bold text-amber-800 uppercase tracking-[0.22em] block">
+            Explore the Archive
           </span>
-          <h2 className="font-serif font-bold text-2xl sm:text-3xl text-amber-950">
-            Manuscript Categories & Disciplines
+
+          <h2 className="font-serif font-bold text-2xl sm:text-3xl text-amber-950 mt-2">
+            Manuscript Collections
           </h2>
+
+          <p className="text-xs text-amber-900/60 mt-3 leading-relaxed">
+            Browse the preserved manuscripts by literary, religious,
+            historical and cultural classification.
+          </p>
+
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {categories.map(cat => {
-            const count = manuscripts.filter(m => m.category === cat.name).length;
+
+          {categories.map((category) => {
+
+            const count = manuscripts.filter(
+              (m) => m.category === category.name
+            ).length;
+
             return (
               <div
-                key={cat.id}
+                key={category.id}
                 onClick={() => {
                   onSearchQuery('');
                   onNavigate('catalogue');
                 }}
-                className="bg-[#fbf8f1] border border-[#e5dcd0] p-6 rounded-2xl hover:border-amber-800/60 hover:shadow-lg transition-all cursor-pointer group space-y-3"
+                className="bg-[#fbf8f1] border border-[#e5dcd0] p-6 rounded-2xl hover:border-amber-800/50 hover:shadow-lg transition-all cursor-pointer group"
               >
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-amber-900/10 text-amber-900 flex items-center justify-center font-bold group-hover:bg-amber-900 group-hover:text-amber-50 transition-colors">
-                    <BookOpen className="w-5 h-5" />
+
+                <div className="flex items-start justify-between">
+
+                  <div className="w-10 h-10 rounded-xl bg-amber-900/10 text-amber-900 flex items-center justify-center group-hover:bg-amber-900 group-hover:text-amber-50 transition-colors">
+                    <Library className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-bold text-amber-800 bg-amber-200/60 px-2.5 py-1 rounded-full">
-                    {count} {count === 1 ? 'Manuscript' : 'Manuscripts'}
+
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-200/50 px-2.5 py-1 rounded-full">
+                    {count}
                   </span>
+
                 </div>
 
-                <h3 className="font-serif font-bold text-lg text-amber-950 group-hover:text-amber-800 transition-colors">
-                  {cat.name}
+                <h3 className="font-serif font-bold text-lg text-amber-950 mt-4">
+                  {category.name}
                 </h3>
 
-                <p className="text-xs text-amber-900/70 leading-relaxed">
-                  {cat.description || 'Rare documents and historical literature.'}
+                <p className="text-xs text-amber-900/65 leading-relaxed mt-2">
+                  {category.description ||
+                    'Historical manuscripts preserved within the Satra collection.'}
                 </p>
+
               </div>
             );
           })}
+
         </div>
       </section>
 
-      {/* Preservation Mission Statement */}
+
+      {/* =========================================================
+          PHYSICAL + DIGITAL PRESERVATION
+      ========================================================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-[#241a11] text-amber-100 rounded-3xl p-8 sm:p-12 border border-amber-900/50 shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-          <div className="space-y-5">
-            <span className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-900/80 text-amber-200 border border-amber-700/60">
-              Preservation Initiative
-            </span>
-            <h2 className="font-serif font-bold text-3xl sm:text-4xl text-amber-50 leading-tight">
-              Why We Digitally Safeguard Ancient Codices
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+          <div className="bg-[#efe5d6] border border-[#ddcbb8] rounded-3xl p-8 space-y-4">
+
+            <HeartHandshake className="w-7 h-7 text-amber-800" />
+
+            <h2 className="font-serif font-bold text-2xl text-amber-950">
+              Physical Conservation
             </h2>
-            <p className="text-xs sm:text-sm text-amber-200/80 leading-relaxed">
-              Fragile palm-leaf manuscripts, birch bark folios, and parchment scrolls are vulnerable to age, humidity, and decay. Through our binary database preservation system, rare historical texts are rendered accessible to researchers, universities, and readers worldwide.
+
+            <p className="text-xs sm:text-sm text-amber-900/75 leading-relaxed">
+              Conservation specialists work directly with damaged manuscripts,
+              treating fragile materials with appropriate conservation
+              practices before further handling and documentation.
             </p>
 
-            <ul className="space-y-2 text-xs text-amber-200/90 font-medium">
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Binary storage inside SQLite BLOBs for durable preservation</span>
+            <ul className="space-y-2 text-xs text-amber-900/75">
+
+              <li className="flex gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-700 shrink-0" />
+                Manuscript condition assessment
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>In-browser full interactive PDF reader with page controls & sepia mode</span>
+
+              <li className="flex gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-700 shrink-0" />
+                Cleaning and stabilisation
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Open digital access with comprehensive search, filters, and metadata</span>
+
+              <li className="flex gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-700 shrink-0" />
+                Reduced handling of fragile originals
               </li>
+
             </ul>
+
           </div>
 
-          <div className="bg-[#1c140c] p-6 rounded-2xl border border-amber-800/40 space-y-4">
-            <h3 className="font-serif font-bold text-lg text-amber-200 flex items-center gap-2">
-              <Award className="w-5 h-5 text-amber-400" />
-              <span>Preservation System Architecture</span>
-            </h3>
 
-            <div className="space-y-3 text-xs text-amber-200/80">
-              <div className="p-3 rounded-lg bg-amber-950/60 border border-amber-800/30 flex items-start gap-3">
-                <Layers className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-amber-100">Direct BLOB Stream</p>
-                  <p className="text-[11px] text-amber-300/70">
-                    PDF files are converted to binary Buffers and served directly from endpoint GET /api/manuscripts/:id/pdf
-                  </p>
-                </div>
-              </div>
+          <div className="bg-[#fbf8f1] border border-[#e5dcd0] rounded-3xl p-8 space-y-4">
 
-              <div className="p-3 rounded-lg bg-amber-950/60 border border-amber-800/30 flex items-start gap-3">
-                <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold text-amber-100">Role-Based Admin Protection</p>
-                  <p className="text-[11px] text-amber-300/70">
-                    Authorized admins manage manuscripts, upload PDFs/covers, and modify publishing status.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <Archive className="w-7 h-7 text-amber-800" />
+
+            <h2 className="font-serif font-bold text-2xl text-amber-950">
+              Digital Preservation
+            </h2>
+
+            <p className="text-xs sm:text-sm text-amber-900/75 leading-relaxed">
+              The digital platform provides a structured environment for
+              manuscript documentation, metadata, digitised documents and
+              future scholarly access.
+            </p>
+
+            <ul className="space-y-2 text-xs text-amber-900/75">
+
+              <li className="flex gap-2">
+                <ScanLine className="w-4 h-4 text-amber-700 shrink-0" />
+                Digital manuscript documentation
+              </li>
+
+              <li className="flex gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                Structured archival storage
+              </li>
+
+              <li className="flex gap-2">
+                <BookOpen className="w-4 h-4 text-amber-700 shrink-0" />
+                Browser-based manuscript access
+              </li>
+
+            </ul>
+
           </div>
+
         </div>
       </section>
+
+
+      {/* =========================================================
+          PROJECT COLLABORATION
+      ========================================================= */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div className="border-t border-amber-200 pt-12 text-center">
+
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-800">
+            Collaborative Preservation Initiative
+          </span>
+
+          <h2 className="font-serif font-bold text-2xl text-amber-950 mt-3">
+            Heritage Stewardship Meets Digital Technology
+          </h2>
+
+          <p className="max-w-3xl mx-auto text-xs sm:text-sm text-amber-900/65 leading-relaxed mt-4">
+            The initiative brings together the custodians of Medhijan Shri
+            Shri Gajala Satra, manuscript conservation expertise associated
+            with Gauhati University and the technical development efforts of
+            the Department of Computer Science and Hinton Research Lab,
+            Gauhati University.
+          </p>
+
+          <button
+            onClick={() => onNavigate('about')}
+            className="mt-6 inline-flex items-center gap-2 text-xs font-bold text-amber-900 hover:text-amber-700"
+          >
+            About the Project and Team
+            <ArrowRight className="w-4 h-4" />
+          </button>
+
+        </div>
+
+      </section>
+
     </div>
   );
 };
