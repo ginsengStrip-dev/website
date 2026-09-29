@@ -58,15 +58,30 @@ export const HomePage: React.FC<HomePageProps> = ({
         <div className="max-w-5xl mx-auto text-center space-y-8 relative z-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-900/60 border border-amber-600/40 text-amber-200 text-xs font-semibold uppercase tracking-widest shadow-inner">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Digital Preservation & Open Knowledge Platform</span>
+            <span>Manuscript Conservation & Digital Preservation</span>
           </div>
 
-          <h1 className="font-serif font-bold text-4xl sm:text-5xl md:text-6xl tracking-tight text-amber-100 leading-tight">
-            Preserving History's Rare Manuscripts for Global Readers
-          </h1>
+            <p className="font-serif text-amber-400 text-sm sm:text-base tracking-wide">
+              Medhijan Shri Shri Gajala Satra · Sivasagar, Assam
+            </p>
 
-          <p className="text-sm sm:text-base md:text-lg text-amber-200/80 max-w-3xl mx-auto font-sans leading-relaxed">
-            Explore centuries of human wisdom, medical codices, astronomical treatises, and epic poetry digitized directly into binary records and readable online for free.
+      
+
+      
+
+            <h1 className="font-serif font-bold text-4xl sm:text-5xl md:text-7xl tracking-tight text-amber-50 leading-[1.08] max-w-5xl mx-auto">
+              Preserving Centuries of
+              <span className="block text-amber-300">
+                Written Heritage
+              </span>
+            </h1>
+
+          <p className="text-sm sm:text-base md:text-lg text-amber-200/80 max-w-3xl mx-auto leading-relaxed">
+            A digital initiative documenting, conserving and safeguarding the
+            historic manuscript collection of Medhijan Shri Shri Gajala Satra.
+            Following damage to fragile manuscripts, conservation specialists
+            and researchers are working to preserve these invaluable records
+            and create a lasting digital archive for future generations.
           </p>
 
           {/* Search Box */}
@@ -101,12 +116,12 @@ export const HomePage: React.FC<HomePageProps> = ({
               <span className="text-xs text-amber-200/70 font-medium">Classical Languages</span>
             </div>
             <div className="bg-amber-950/40 p-4 rounded-xl border border-amber-800/30">
-              <span className="font-serif font-bold text-2xl text-amber-300 block">100%</span>
-              <span className="text-xs text-amber-200/70 font-medium">Free Digital Access</span>
+              <span className="font-serif font-bold text-2xl text-amber-300 block">{categories.length}</span>
+              <span className="text-xs text-amber-200/70 font-medium">Collection Categories</span>
             </div>
             <div className="bg-amber-950/40 p-4 rounded-xl border border-amber-800/30">
-              <span className="font-serif font-bold text-2xl text-amber-300 block">BLOB</span>
-              <span className="text-xs text-amber-200/70 font-medium">SQLite PDF Storage</span>
+              <span className="font-serif font-bold text-2xl text-amber-300 block">Sanchipat</span>
+              <span className="text-xs text-amber-200/70 font-medium">Historic Manuscript Tradition</span>
             </div>
           </div>
         </div>

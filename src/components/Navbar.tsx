@@ -10,7 +10,8 @@ import {
   Compass,
   FileText,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  Landmark
 } from 'lucide-react';
 import { AdminUser } from '../types';
 
@@ -39,16 +40,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="w-10 h-10 rounded-xl bg-amber-900 text-amber-100 flex items-center justify-center shadow-md border border-amber-800">
               <BookOpen className="w-5 h-5 text-amber-200" />
             </div>
-            <div>
-              <div className="font-serif font-bold text-lg tracking-tight text-amber-950 flex items-center gap-2">
-                ARCHIVALIA
-                <span className="text-[10px] font-sans font-medium px-1.5 py-0.5 rounded bg-amber-200/60 text-amber-900 border border-amber-300">
-                  Preservation
-                </span>
+            <div className="leading-tight">
+
+              <div className="font-serif font-bold text-[15px] sm:text-lg tracking-tight text-amber-950">
+                Gajala Satra Manuscript Archive
               </div>
-              <p className="text-[11px] text-amber-800/80 font-medium tracking-wide">
-                Digital Manuscript Preservation & Online Library
-              </p>
+
+              <div className="flex items-center gap-1.5 mt-1">
+                <Landmark className="w-3 h-3 text-amber-700" />
+
+                <p className="text-[10px] sm:text-[11px] text-amber-800/75 font-medium tracking-wide">
+                  Medhijan Shri Shri Gajala Satra · Sivasagar
+                </p>
+              </div>
+
             </div>
           </div>
 
@@ -95,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-amber-900/80 hover:bg-amber-900/5 hover:text-amber-950'
               }`}
             >
-              Preservation Project
+              About
             </button>
           </nav>
 
